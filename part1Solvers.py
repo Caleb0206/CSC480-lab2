@@ -261,6 +261,7 @@ def sudoku(puzzle):
     # Distinct Rows
     for row in grid:
         for cell in row:
+            # add limits to every Cell
             s.add(And(cell >= 1, cell <= 9))
 
         s.add(Distinct(row))
@@ -314,7 +315,7 @@ The question is: How many ways can $2 be made using any number of coins?
 
 def coin_sum(total):
     # Variables for the numbers of each coin denomination
-    p, n, d, q, f, d = Ints('p n d q f d')
+    p, n, d, q, f, c = Ints('p n d q f c')
 
     """
     Print the number of ways the $2 can be made using any number of the above coins.
@@ -322,3 +323,14 @@ def coin_sum(total):
     Hint: You may need to run many related but slightly different model checks.
     """
     # TODO: YOUR CODE HERE
+    s = Solver()
+    counter = 0
+    s.add(And(p >= 0, n >= 0, d >= 0, q >= 0, f >= 0, c >= 0))
+
+    s.add((1 * p + 5 * n + 10 * d + 25 * q + 50 * f + 100 * c) == total)
+    while s.check() == z3.sat:
+        counter += 1
+        model = s.model()
+        s.add(Or(p != model[p], n != model[n], d != model[d], q != model[q], f != model[f], c != model[c]))
+
+    print("Different amount of ways to make $2 = ", counter)
