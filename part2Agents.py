@@ -1,4 +1,5 @@
 import math
+from itertools import combinations
 
 from model import (
     Location,
@@ -416,9 +417,9 @@ class SpellCastingPuzzleWizard(WizardAgent):
         if hasattr(self, "planned") and self.planned:
             return self.planned.pop(0)
 
-        # Start with neutral stones first
-        all_stones = list(neutral_stones)
-
+        min_cost = math.inf
+        best_moves = None  # best moves
+        best_assignment = None  # best assignment
         # dictionary of original types of locations
         og_types = {}
         for loc in fire_stones:
@@ -428,80 +429,113 @@ class SpellCastingPuzzleWizard(WizardAgent):
         for loc in neutral_stones:
             og_types[loc] = "neutral"
 
-        # all possible assignments of stones
-        assignments = [[]]  # start with an empty list
-        print("before assignments")
-        # compute all possible assignments of stones
-        for i in range(len(all_stones)):
-            new_assignments = []
+        # Start with neutral stones first
+        all_stones = list(neutral_stones)
 
-            for assignment in assignments:
-                new_assignments.append(assignment + ["fire"])
-                new_assignments.append(assignment + ["ice"])
-            assignments = new_assignments
+        # If No neutral stones, need to change fire or ice stones
+        if (len(neutral_stones) == 0):
+            all_stones = list(fire_stones) + list(ice_stones)
 
-        print("done with assignments")
+            for i in range(4):
+                for stones in combinations(all_stones, i):
+                    new_fire = set(fire_stones)
+                    new_ice = set(ice_stones)
+                    assign_dict = {}
+                    cost = 0
 
-        min_cost = math.inf
-        best_moves = None  # best moves
-        best_assignment = None  # best assignment
+                    for loc in stones:
+                        # Change selected fire/ice stone
+                        if loc in new_fire:
+                            new_fire.remove(loc)
+                            new_ice.add(loc)
+                            assign_dict[loc] = "ice"
+                            cost += 10
+                        elif loc in new_ice:
+                            new_ice.remove(loc)
+                            new_fire.add(loc)
+                            assign_dict[loc] = "fire"
+                            cost += 15
 
-        # try every assignment and calculate the cost
-        for assignment in assignments:
-            new_fire_stones = list(fire_stones)
-            new_ice_stones = list(ice_stones)
-            assign_dict = {}  # dictionary for processing each assignment
-            cost = 0
-            
+                    # prune if cost is >= min_cost
+                    if cost >= min_cost:
+                        continue
+                    # find the moves from solver
+                    moves = self.masyu_solver(state, list(new_fire), list(new_ice))
+                    if moves is not None and cost < min_cost:
+                        min_cost = cost
+                        best_moves = moves
+                        best_assignment = assign_dict
+
+        else:
+            # Else, Neutral stones exist
+            # all possible assignments of stones
+            assignments = [[]]  # start with an empty list
+
+            # compute all possible assignments of stones
             for i in range(len(all_stones)):
-                loc = all_stones[i]
-                potential_type = assignment[i]
+                new_assignments = []
 
-                assign_dict[loc] = potential_type
+                for assignment in assignments:
+                    new_assignments.append(assignment + ["fire"])
+                    new_assignments.append(assignment + ["ice"])
+                assignments = new_assignments
 
-                if potential_type == "fire":
-                    # treat assignment as fire
-                    new_fire_stones.append(loc)
-                else:
-                    # treat the assignment as ice
-                    new_ice_stones.append(loc)
+            # try every assignment and calculate the cost
+            for assignment in assignments:
+                new_fire_stones = list(fire_stones)
+                new_ice_stones = list(ice_stones)
+                assign_dict = {}  # dictionary for processing each new assignment change
+                cost = 0
 
-                # prune assignments with big costs
-                if cost >= min_cost:
-                    continue
+                for i in range(len(all_stones)):
+                    loc = all_stones[i]
+                    potential_type = assignment[i]
 
-                # calculate the cost of ONLY IF transforming the stone
-                if og_types[loc] == "fire" and potential_type == "ice":
-                    cost += 10
-                elif og_types[loc] == "ice" and potential_type == "fire":
-                    cost += 15
-                elif og_types[loc] == "neutral" and potential_type == "ice":
-                    cost += 10
-                elif og_types[loc] == "neutral" and potential_type == "fire":
-                    cost += 15
-            print("Trying assignment ", "cost: ", cost)
-            moves = self.masyu_solver(state, new_fire_stones, new_ice_stones)
-            print("Finished assignment ")
+                    assign_dict[loc] = potential_type  # new assignment change here
 
-            # If masyu_solver solved it and cost is cheaper
-            if moves is not None and cost < min_cost:
-                min_cost = cost
-                best_moves = moves  # update best_moves to this moves set returned by solver
-                best_assignment = assign_dict  # update best_assignment
+                    if potential_type == "fire":
+                        # treat assignment as fire
+                        new_fire_stones.append(loc)
+                    else:
+                        # treat the assignment as ice
+                        new_ice_stones.append(loc)
 
-        if best_assignment is None:
-            raise RuntimeError("Could not find a working assignment")
+                    # prune assignments with big costs
+                    if cost >= min_cost:
+                        continue
+
+                    # calculate the cost of ONLY IF transforming the stone
+                    if og_types[loc] == "fire" and potential_type == "ice":
+                        cost += 10
+                    elif og_types[loc] == "ice" and potential_type == "fire":
+                        cost += 15
+                    elif og_types[loc] == "neutral" and potential_type == "ice":
+                        cost += 10
+                    elif og_types[loc] == "neutral" and potential_type == "fire":
+                        cost += 15
+
+                # solve this problem given the new fire stones and new ice stones
+                moves = self.masyu_solver(state, new_fire_stones, new_ice_stones)
+
+                # If masyu_solver solved it and cost is cheaper
+                if moves is not None and cost < min_cost:
+                    min_cost = cost
+                    best_moves = moves  # update best_moves to this moves set returned by solver
+                    best_assignment = assign_dict  # update best_assignment
+
+            if best_assignment is None:
+                raise RuntimeError("Could not find a working assignment")
 
         # return actions one by one
         actions = []
         current = wizard_location  # where the wizard is
         changed = set()
 
-        # create actions
+        # create actions from best_moves (contains stones that need a spell)
         for move in best_moves:
-            # if wizard is following the best_assignment and that was not changed
+            # if wizard is on a stone that needs to change, not changed the stone yet
             if current in best_assignment and current not in changed:
-                original_stone = og_types[current]  # get the original type
+                original_stone = og_types[current]
                 new_stone = best_assignment[current]
 
                 # if the original stone was transformed
@@ -513,8 +547,8 @@ class SpellCastingPuzzleWizard(WizardAgent):
                         # if changed to ice, it was a Freeze
                         actions.append(WizardSpells.FREEZE)
 
-                    # update: have changed the Wizard's location now
-                    changed.add(current)
+                        # update: have changed the Wizard's location now
+                        changed.add(current)
             # add this Spell or Move to actions
             actions.append(move)
 
