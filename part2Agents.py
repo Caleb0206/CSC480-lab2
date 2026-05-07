@@ -433,11 +433,15 @@ class SpellCastingPuzzleWizard(WizardAgent):
         # Start with neutral stones first
         all_stones = list(neutral_stones)
 
-        # If No neutral stones, need to change fire or ice stones
+        # If no neutral stones, need to change fire or ice stones
         if (len(neutral_stones) == 0):
+            MAX_FLIPPED_STONES = 3  # a cutoff bound up to 3 spell castings
+
+            # all_stones not any neutral stones, so starts with fire and ice stones
             all_stones = list(fire_stones) + list(ice_stones)
 
-            for i in range(4):
+            for i in range(MAX_FLIPPED_STONES + 1):
+                # find subset combinations of i stones to change, 0 to MAX_FLIPPED_STONES
                 for stones in combinations(all_stones, i):
                     new_fire = set(fire_stones)
                     new_ice = set(ice_stones)
