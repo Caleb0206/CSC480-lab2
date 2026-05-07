@@ -418,8 +418,9 @@ class SpellCastingPuzzleWizard(WizardAgent):
             return self.planned.pop(0)
 
         min_cost = math.inf
-        best_moves = None  # best moves
-        best_assignment = None  # best assignment
+        best_moves = None  # best list of moves for the Wizard
+        best_casting = None  # best casting of stones
+
         # dictionary of original types of locations
         og_types = {}
         for loc in fire_stones:
@@ -464,24 +465,24 @@ class SpellCastingPuzzleWizard(WizardAgent):
                     if moves is not None and cost < min_cost:
                         min_cost = cost
                         best_moves = moves
-                        best_assignment = assign_dict
+                        best_casting = assign_dict
 
         else:
             # Else, Neutral stones exist
-            # all possible assignments of stones
-            assignments = [[]]  # start with an empty list
+            # all possible castings of stones
+            castings = [[]]  # start with an empty list
 
             # compute all possible assignments of stones
             for i in range(len(all_stones)):
-                new_assignments = []
+                new_castings = []
 
-                for assignment in assignments:
-                    new_assignments.append(assignment + ["fire"])
-                    new_assignments.append(assignment + ["ice"])
-                assignments = new_assignments
+                for cast in castings:
+                    new_castings.append(cast + ["fire"])
+                    new_castings.append(cast + ["ice"])
+                castings = new_castings
 
-            # try every assignment and calculate the cost
-            for assignment in assignments:
+            # try every casting and calculate the cost
+            for cast in castings:
                 new_fire_stones = list(fire_stones)
                 new_ice_stones = list(ice_stones)
                 assign_dict = {}  # dictionary for processing each new assignment change
@@ -489,7 +490,7 @@ class SpellCastingPuzzleWizard(WizardAgent):
 
                 for i in range(len(all_stones)):
                     loc = all_stones[i]
-                    potential_type = assignment[i]
+                    potential_type = cast[i]
 
                     assign_dict[loc] = potential_type  # new assignment change here
 
@@ -521,48 +522,48 @@ class SpellCastingPuzzleWizard(WizardAgent):
                 if moves is not None and cost < min_cost:
                     min_cost = cost
                     best_moves = moves  # update best_moves to this moves set returned by solver
-                    best_assignment = assign_dict  # update best_assignment
+                    best_casting = assign_dict  # update best_casting
 
-            if best_assignment is None:
+            if best_casting is None:
                 raise RuntimeError("Could not find a working assignment")
 
         # return actions one by one
-        actions = []
-        current = wizard_location  # where the wizard is
-        changed = set()
+        result_actions = []
+        current_loc = wizard_location  # where the wizard is
+        casted_spell_on = set()
 
         # create actions from best_moves (contains stones that need a spell)
         for move in best_moves:
-            # if wizard is on a stone that needs to change, not changed the stone yet
-            if current in best_assignment and current not in changed:
-                original_stone = og_types[current]
-                new_stone = best_assignment[current]
+            # if wizard is on a stone that needs to change, not casted the stone yet
+            if current_loc in best_casting and current_loc not in casted_spell_on:
+                original_stone = og_types[current_loc]
+                new_stone = best_casting[current_loc]
 
                 # if the original stone was transformed
                 if original_stone != new_stone:
                     if new_stone == "fire":
                         # if changed to fire, it was a Fireball
-                        actions.append(WizardSpells.FIREBALL)
+                        result_actions.append(WizardSpells.FIREBALL)
                     elif new_stone == "ice":
                         # if changed to ice, it was a Freeze
-                        actions.append(WizardSpells.FREEZE)
+                        result_actions.append(WizardSpells.FREEZE)
 
-                        # update: have changed the Wizard's location now
-                        changed.add(current)
+                        # update: have casted the spell to the Wizard's location now
+                        casted_spell_on.add(current_loc)
             # add this Spell or Move to actions
-            actions.append(move)
+            result_actions.append(move)
 
             # update location with the right move
             if move == WizardMoves.UP:
-                current = Location(current.row - 1, current.col)
+                current_loc = Location(current_loc.row - 1, current_loc.col)
             elif move == WizardMoves.DOWN:
-                current = Location(current.row + 1, current.col)
+                current_loc = Location(current_loc.row + 1, current_loc.col)
             elif move == WizardMoves.LEFT:
-                current = Location(current.row, current.col - 1)
+                current_loc = Location(current_loc.row, current_loc.col - 1)
             elif move == WizardMoves.RIGHT:
-                current = Location(current.row, current.col + 1)
+                current_loc = Location(current_loc.row, current_loc.col + 1)
 
-        self.planned = actions
+        self.planned = result_actions
         return self.planned.pop(0)
 
 
